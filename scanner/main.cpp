@@ -1,85 +1,67 @@
-#include <iostream>
-#include <string>
+#include "main.h"
 
-#include "rplidar.h"
+#include <csignal>
+#include <map>
 
-using namespace rp::standalone::rplidar;
-
-void showUsage(std::string arg0)
+void showUsageAndExit(std::string arg0)
 {
-    std::cout << "Usage: " << arg0 << " SERIAL_PORT" << std::endl;
+    std::cout << "Usage: " << arg0 << " [COM_PATH] OUT_FILE " << std::endl;
+    exit(-1);
+}
+
+void parseArgs(arguments_t *args, int argc, const char *argv[])
+{
+    if (argc == 5)
+    {
+        args->out_file = argv[1];
+        args->z_low = std::atoi(argv[2]);
+        args->z_high = std::atoi(argv[3]);
+        args->z_step = std::atoi(argv[4]);
+        return;
+    }
+
+    if (argc == 6)
+    {
+        args->com_path = argv[1];
+        args->out_file = argv[2];
+        args->z_low = std::atoi(argv[3]);
+        args->z_high = std::atoi(argv[4]);
+        args->z_step = std::atoi(argv[5]);
+        return;
+    }
+
+    if (argc < 5 || argc > 6)
+    {
+        showUsageAndExit(argv[0]);
+    }
 }
 
 int main(int argc, const char *argv[])
 {
-    const char *opt_com_path = "/dev/ttyUSB0";
-    const _u32 baudrateArray[2] = {115200, 256000};
-    _u32 arg_baud_rate = 0;
-    u_result op_result;
+    struct arguments_t args;
 
-    if (argc != 2)
+    // Parse user arguments
+    parseArgs(&args, argc, argv);
+
+    // Create Scanner
+    scanner = Scanner::make_shared(args.com_path);
+
+    // Connect Scanner
+    if (!scanner->connect())
     {
-        showUsage(argv[0]);
-        return 1;
+        std::cerr << "Could not connect Sacnner to RPlidar device" << std::endl;
+        return -2;
     }
-    std::cout << "RPLIDAR_SDK_VERSION: " RPLIDAR_SDK_VERSION << std::endl;
+    scanner->showInfo();
 
-    // Read serial port from the command line...
-    opt_com_path = argv[1];
-
-    // Create the driver instance
-    RPlidarDriver *drv = RPlidarDriver::CreateDriver(DRIVER_TYPE_SERIALPORT);
-    if (!drv)
+    // Check Scanner health
+    if (!scanner->isHealthy())
     {
-        fprintf(stderr, "insufficent memory, exit\n");
-        exit(-2);
-    }
-
-    rplidar_response_device_info_t devinfo;
-    bool connectSuccess = false;
-    size_t baudRateArraySize = (sizeof(baudrateArray)) / (sizeof(baudrateArray[0]));
-    for (size_t i = 0; i < baudRateArraySize; ++i)
-    {
-        if (!drv)
-            drv = RPlidarDriver::CreateDriver(DRIVER_TYPE_SERIALPORT);
-        if (IS_OK(drv->connect(opt_com_path, baudrateArray[i])))
-        {
-            op_result = drv->getDeviceInfo(devinfo);
-
-            if (IS_OK(op_result))
-            {
-                connectSuccess = true;
-                break;
-            }
-            else
-            {
-                delete drv;
-                drv = NULL;
-            }
-        }
-    }
-    if (!connectSuccess)
-    {
-
-        fprintf(stderr, "Error, cannot bind to the specified serial port %s.\n", opt_com_path);
-        goto on_finished;
+        std::cerr << "RPlidar device status is not correct. Restart device and try again" << std::endl;
+        return -3;
     }
 
-    // print out the device serial number, firmware and hardware version number..
-    printf("RPLIDAR S/N: ");
-    for (int pos = 0; pos < 16; ++pos)
-    {
-        printf("%02X", devinfo.serialnum[pos]);
-    }
-
-    printf("\n"
-           "Firmware Ver: %d.%02d\n"
-           "Hardware Rev: %d\n",
-           devinfo.firmware_version >> 8, devinfo.firmware_version & 0xFF, (int)devinfo.hardware_version);
-
-    // done!
-on_finished:
-    RPlidarDriver::DisposeDriver(drv);
-    drv = NULL;
+    scanner->scan(args.z_low, args.z_high, args.z_step);
+    scanner->save(args.out_file);
     return 0;
 }

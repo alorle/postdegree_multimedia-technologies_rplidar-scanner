@@ -10,7 +10,10 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/scanner/scanner",
             "args": [
-                "/dev/ttyUSB0"
+                "scan.pcd",
+                "0",
+                "100",
+                "5",
             ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
