@@ -2,6 +2,7 @@
 
 ## Usage
 
+    apt install libpcl-common1.8 libpcl-io1.8
     git submodule update --recursive
     make
 
